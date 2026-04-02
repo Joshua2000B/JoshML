@@ -24,7 +24,7 @@
         "SRCML_ANTLR_COMPILE_FLAGS": "-Wno-system-headers;-Wno-deprecated-declarations;-Wno-format",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_OSX_ARCHITECTURES": "x86_64;arm64",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "10.15",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
         "BUILD_LIBSRCML_TESTS": "ON",
         "BUILD_PARSER_TESTS": "ON",
         "CPACK_OUTPUT_FILE_PREFIX": "dist"
