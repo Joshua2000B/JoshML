@@ -260,6 +260,10 @@ const static srcMLState::MODE_TYPE MODE_NO_BLOCK_CONTENT;
 /** mode for c-attribute processing */
 const static srcMLState::MODE_TYPE MODE_INCLUDE_ATTRIBUTE;
 
+const static srcMLState::MODE_TYPE MODE_NUMBER_LITERAL;
+
+const static srcMLState::MODE_TYPE MODE_OPERATOR;
+
 // Python modes
 const static srcMLState::MODE_TYPE MODE_EXCLUDE_NO_PAREN_TUPLES_PY;
 

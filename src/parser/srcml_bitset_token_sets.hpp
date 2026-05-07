@@ -339,4 +339,29 @@ token_set(srcMLParser, function_declaration_specifiers_ts_token_set,
     srcMLParser::JS_STATIC, srcMLParser::TS_ABSTRACT
 )
 
+
+// static const std::unordered_set<int> JOSH_TYPE_MODIFIERS = { MULTOPS, REFOPS };
+//     static const std::unordered_set<int> JOSH_DECL_SPECIFIERS = {};
+//     static const std::unordered_set<int> JOSH_DECL_NAME_ENDERS = { TERMINATE, EQUAL, LBRACKET, COMMA };
+
+token_set(srcMLParser, josh_name_tokens,
+    srcMLParser::NAME, srcMLParser::VOID, srcMLParser::EMIT, srcMLParser::INCLUDE, srcMLParser::DEFINE, srcMLParser::ELIF,
+    srcMLParser::ENDIF, srcMLParser::ERRORPREC, srcMLParser::IFDEF, srcMLParser::IFNDEF, srcMLParser::LINE,
+    srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING
+)
+
+token_set(srcMLParser, josh_type_modifiers,
+    srcMLParser::MULTOPS, srcMLParser::REFOPS
+)
+
+token_set(srcMLParser, josh_decl_specifiers,
+    srcMLParser::VIRTUAL, srcMLParser::CONST, srcMLParser::STATIC, srcMLParser::CONSTEXPR, srcMLParser::VOLATILE,
+    srcMLParser::EXTERN, srcMLParser::MUTABLE
+)
+
+token_set(srcMLParser, josh_decl_name_enders,
+    srcMLParser::TERMINATE, srcMLParser::EQUAL, srcMLParser::LBRACKET, srcMLParser::COMMA, srcMLParser::LPAREN
+)
+
+
 #endif

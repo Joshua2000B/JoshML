@@ -92,6 +92,8 @@ const srcMLState::MODE_TYPE ModeStack::MODE_IF_STATEMENT              (bit(__COU
 const srcMLState::MODE_TYPE ModeStack::MODE_BLOCK_CONTENT             (bit(__COUNTER__));
 const srcMLState::MODE_TYPE ModeStack::MODE_NO_BLOCK_CONTENT          (bit(__COUNTER__));
 const srcMLState::MODE_TYPE ModeStack::MODE_INCLUDE_ATTRIBUTE         (bit(__COUNTER__));
+const srcMLState::MODE_TYPE ModeStack::MODE_NUMBER_LITERAL            (bit(__COUNTER__));
+const srcMLState::MODE_TYPE ModeStack::MODE_OPERATOR                  (bit(__COUNTER__));
 
 // Python modes
 const srcMLState::MODE_TYPE ModeStack::MODE_EXCLUDE_NO_PAREN_TUPLES_PY (bit(__COUNTER__));

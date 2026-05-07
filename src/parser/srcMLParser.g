@@ -120,6 +120,7 @@ header "post_include_hpp" {
 #include <deque>
 #include <array>
 #include <stack>
+#include <unordered_set>
 #include <Language.hpp>
 #include <ModeStack.hpp>
 #include <srcml_options.hpp>
@@ -827,6 +828,11 @@ public:
     static const antlr::BitSet declaration_specifiers_ts_token_set;
     static const antlr::BitSet function_declaration_specifiers_ts_token_set;
 
+    static const antlr::BitSet josh_type_modifiers;
+    static const antlr::BitSet josh_decl_name_enders;
+    static const antlr::BitSet josh_decl_specifiers;
+    static const antlr::BitSet josh_name_tokens;
+
     // constructor
     srcMLParser(antlr::TokenStream& lexer, int lang, const OPTION_TYPE& options);
 
@@ -1149,6 +1155,828 @@ public:
         return temp_array;
     }
 }
+
+
+
+
+
+
+/*
+  josh_start
+*/
+josh_start[] { ++start_count; ENTRY_DEBUG_START ENTRY_DEBUG 
+
+    // this is where any setup stuff should go
+
+
+
+
+
+
+
+    // begin at statement level
+    josh_statement_level();
+
+}:;
+
+
+
+josh_statement_level[] { ENTRY_DEBUG
+
+    while (LA(1) != 1 /*EOF*/ && LA(1) != RCURLY) {
+
+        josh_statement();
+
+    }
+
+}:;
+
+
+josh_statement[] { ENTRY_DEBUG
+    int current_token = LA(1);
+
+    if (josh_name_tokens.member(current_token) || josh_decl_specifiers.member(current_token)) {
+        // if it matches a function, mark up function
+        if (josh_is_function()) {
+            //josh_function();
+        }
+
+        // if it matches a decl, mark up decl_stmt
+        else if (josh_is_decl_stmt()) {
+            josh_decl_stmt();
+        }
+
+        // otherwise, it's almost certainly an expression statement
+        else {
+            josh_expression_statement();
+        }
+    }
+
+    else if (current_token == CONSTANTS) {
+        josh_expression_statement();
+    }
+
+    else if (current_token == TERMINATE) {
+        josh_empty_statement();
+    }
+
+    else if (current_token == RETURN) {
+        josh_return_statement();
+    }
+
+    else if (current_token == BREAK) {
+        josh_break_statement();
+    }
+
+    else if (current_token == CONTINUE) {
+        josh_continue_statement();
+    }
+
+    else if (current_token == WHILE) {
+        josh_while_loop();
+    }
+
+    else if (current_token == IF) {
+        //std::cerr << "If!" << std::endl;
+        josh_if_stmt();
+    }
+
+    else { // FAILSAFE - consume anyway
+        consume();
+    }
+
+}:;
+
+josh_empty_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_STATEMENT);
+    startElement(SEMPTY);
+
+    consume(); // consume ";"
+
+    endMode(MODE_STATEMENT);
+
+}:;
+
+josh_return_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_STATEMENT);
+    startElement(SRETURN_STATEMENT);
+
+    consume(); // consume "return"
+
+    if (LA(1) == TERMINATE) {
+        consume();
+    }
+    else {
+        josh_expression({TERMINATE});
+        if (LA(1) == TERMINATE) consume(); // consume ";"
+    }
+
+    endMode(MODE_STATEMENT);
+
+}:;
+
+josh_break_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_STATEMENT);
+    startElement(SBREAK_STATEMENT);
+
+    consume(); // consume "break"
+    if (LA(1) == TERMINATE) consume(); // consume ";"
+
+    endMode(MODE_STATEMENT);
+
+}:;
+
+josh_continue_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_STATEMENT);
+    startElement(SCONTINUE_STATEMENT);
+
+    consume(); // consume "continue"
+    if (LA(1) == TERMINATE) consume(); // consume ";"
+
+    endMode(MODE_STATEMENT);
+
+}:;
+
+
+josh_while_loop[] { ENTRY_DEBUG
+
+    startNewMode(MODE_WHILE_LOOP_PY);
+    startElement(SWHILE_STATEMENT);
+
+    consume(); // consume "while"
+
+    josh_condition();
+
+    if (LA(1) == LCURLY) josh_block();
+    else josh_pseudo_block();
+
+    endMode(MODE_WHILE_LOOP_PY);
+
+}:;
+
+josh_if_stmt[] { ENTRY_DEBUG
+    startNewMode(MODE_IF_STATEMENT);
+    startElement(SIF_STATEMENT);
+
+    startNewMode(MODE_IF);
+    startElement(SIF);
+
+    consume(); // consume "if"
+
+
+    if (LA(1) == CONSTEXPR) {
+        startNewMode(MODE_SPECIFIER_PY);
+        startElement(SCLASS_SPECIFIER);
+
+        consume(); // consume "constexpr"
+
+        endMode(MODE_SPECIFIER_PY);
+    }
+
+
+
+    josh_condition();
+
+    if (LA(1) == LCURLY) josh_block();
+    else josh_pseudo_block();
+
+
+    endMode(MODE_IF);
+
+
+    while (LA(1) == ELSE) { // loop through all possible "else if"s and "else"s
+        if (next_token() == IF) {
+            // process else if
+            startNewMode(MODE_IF);
+            startElement(SELSEIF);
+
+            consume(); // consume "else"
+            consume(); // consume "if"
+
+            josh_condition();
+
+            if (LA(1) == CONSTEXPR) {
+                startNewMode(MODE_SPECIFIER_PY);
+                startElement(SCLASS_SPECIFIER);
+
+                consume(); // consume "constexpr"
+
+                endMode(MODE_SPECIFIER_PY);
+            }
+
+            if (LA(1) == LCURLY) josh_block();
+            else josh_pseudo_block();
+
+            endMode(MODE_IF);
+        }
+        else {
+            startNewMode(MODE_ELSE);
+            startElement(SELSE);
+
+            consume(); // consume "else"
+
+            if (LA(1) == LCURLY) josh_block();
+            else josh_pseudo_block();
+
+            endMode(MODE_ELSE);
+            break;
+        }
+    }
+
+
+    endMode(MODE_IF_STATEMENT);
+}:;
+
+
+
+
+josh_condition[] { ENTRY_DEBUG
+
+    startNewMode(MODE_CONDITION);
+    startElement(SCONDITION);
+
+    if (LA(1) == LPAREN) consume(); // consume "("
+
+
+    josh_expression({RPAREN});
+
+
+    if (LA(1) == RPAREN) consume(); // consume ")"
+
+    endMode(MODE_CONDITION);
+
+}:;
+
+
+
+josh_block[] { ENTRY_DEBUG
+
+    startNewMode(MODE_BLOCK);
+    startElement(SBLOCK);
+
+    consume(); // consume "{"
+
+    startNewMode(MODE_BLOCK_CONTENT);
+    startNoSkipElement(SCONTENT);
+
+    josh_statement_level();
+
+    flushSkip();
+    endMode(MODE_BLOCK_CONTENT);
+
+    if (LA(1) == RCURLY) consume(); // consume "}"
+
+    endMode(MODE_BLOCK);
+
+}:;
+
+josh_pseudo_block[] { ENTRY_DEBUG
+
+    startNewMode(MODE_BLOCK);
+    startNoSkipElement(SPSEUDO_BLOCK);
+
+
+    startNewMode(MODE_BLOCK_CONTENT);
+    startNoSkipElement(SCONTENT);
+
+    josh_statement();
+
+    endMode(MODE_BLOCK_CONTENT);
+
+    endMode(MODE_BLOCK);
+
+}:;
+
+josh_expression_block[] { ENTRY_DEBUG
+
+    startNewMode(MODE_BLOCK);
+    startElement(SBLOCK);
+
+    consume(); // consume "{"
+
+    while(LA(1) != RCURLY && LA(1) != 1 /* EOF */) {
+        josh_expression({COMMA,RCURLY});
+        if (LA(1) == COMMA) consume(); // consume ","
+    }
+
+
+    if (LA(1) == RCURLY) consume(); // consume "}"
+
+    endMode(MODE_BLOCK);
+
+
+}:;
+
+josh_decl_stmt[] { ENTRY_DEBUG
+
+    startNewMode(MODE_DECL | MODE_STATEMENT);
+    startElement(SDECLARATION_STATEMENT);
+
+    josh_decl();
+
+    while(LA(1) == COMMA) {
+        consume(); // consume comma
+
+        josh_decl(true);
+    }
+
+    if (LA(1) == TERMINATE) consume (); // consume ";"
+
+    endMode(MODE_DECL | MODE_STATEMENT);
+
+}:;
+
+josh_decl[bool prev_type = false] { ENTRY_DEBUG
+
+    startNewMode(MODE_DECL);
+    startElement(SDECLARATION);
+
+
+    // Handle types. Count how many things are a part of the type and then call type rule
+    int type_children_count = 0;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+        while(!josh_decl_name_enders.member(LA(1))) {
+            if (josh_name_tokens.member(LA(1))) {
+                josh_name();
+                ++type_children_count;
+            }
+            else {
+                consume();
+                ++type_children_count;
+            }
+        }
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+
+    // OK, now actually do the types big dog
+    //// BUT ONLY if we say so
+    if (!prev_type) {
+        josh_type(type_children_count-1);
+    }
+    else { // do <type ref="pref"/>
+        startNewMode(MODE_LOCAL);
+        startElement(STYPEPREV);
+        endMode(MODE_LOCAL);
+    }
+
+    // now the name
+    josh_name();
+
+
+    if (LA(1) == LPAREN) {
+        josh_argument_list();
+    }
+
+    // alright boys, if there's a equals sign, get 'm
+    else if (LA(1) == EQUAL) {
+        josh_init();
+    }
+
+
+
+    endMode(MODE_DECL);
+
+}:;
+
+josh_type[int count] { ENTRY_DEBUG
+
+    startNewMode(MODE_EAT_TYPE);
+    startElement(STYPE);
+
+    for (int i = 0; i < count; ++i) {
+        if (josh_name_tokens.member(LA(1))) {
+            josh_name();
+        }
+        else if (LA(1) == MULTOPS || LA(1) == REFOPS) {
+            startNewMode(MODE_LOCAL);
+            startElement(SMODIFIER);
+
+            consume();
+
+            endMode(MODE_LOCAL);
+        }
+        else if (josh_decl_specifiers.member(LA(1))) {
+            startNewMode(MODE_LOCAL);
+            startElement(SFUNCTION_SPECIFIER);
+
+            consume();
+
+            endMode(MODE_LOCAL);
+        }
+    }
+
+    endMode(MODE_EAT_TYPE);
+
+}:;
+
+josh_init[] { ENTRY_DEBUG
+
+    startNewMode(MODE_INIT);
+    startElement(SINIT);
+
+    consume(); // consume "="
+
+    josh_expression({TERMINATE,COMMA});
+
+
+    endMode(MODE_INIT);
+
+}:;
+
+josh_expression_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_EXPRESSION | MODE_STATEMENT);
+    startElement(SEXPRESSION_STATEMENT);
+
+    josh_expression({TERMINATE});
+
+    consume(); // consume ";"
+
+    endMode(MODE_EXPRESSION | MODE_STATEMENT);
+
+}:;
+
+
+josh_expression[std::unordered_set<int> EXPR_END_TOKENS] { ENTRY_DEBUG
+
+    startNewMode(MODE_EXPRESSION);
+    startElement(SEXPRESSION);
+
+    int paren_count = 0;
+
+    while(LA(1) != TERMINATE && LA(1) != 1 /* EOF */) {
+
+        int current_token = LA(1);
+
+        // If we are stopping at an RPAREN, only stop if the RPARENS have been balanced till now
+        if (LA(1) == RPAREN && EXPR_END_TOKENS.find(RPAREN) != EXPR_END_TOKENS.end() && paren_count != 0) { }
+        else if (EXPR_END_TOKENS.find(LA(1)) != EXPR_END_TOKENS.end()) { // Found ending token, end
+            break;
+        }
+        
+        if (josh_name_tokens.member(current_token) && josh_is_call()) {
+
+            startNewMode(MODE_FUNCTION_CALL);
+            startElement(SFUNCTION_CALL);
+
+            josh_name();
+
+            josh_argument_list();
+
+            endMode(MODE_FUNCTION_CALL);
+
+        }
+
+        else if (josh_name_tokens.member(current_token)) { 
+
+            josh_name();
+
+        }
+
+        else if (current_token == CONSTANTS) { 
+
+            startNewMode(MODE_NUMBER_LITERAL);
+            startElement(SLITERAL);
+
+            consume(); // consume CONSTANTS
+
+            endMode(MODE_NUMBER_LITERAL);
+
+        }
+
+        else if (current_token == OPERATORS || current_token == MULTOPS || current_token == ASSIGNMENT || current_token == EQUAL || 
+                 current_token == TEMPOPS || current_token == TEMPOPE || current_token == LPAREN || current_token == RPAREN ||
+                 current_token == REFOPS) {
+
+            if (current_token == LPAREN) ++paren_count;
+            else if (current_token == RPAREN) --paren_count;
+
+            startNewMode(MODE_OPERATOR);
+            startElement(SOPERATOR);
+
+            consume(); // consume OPERATORS
+
+            endMode(MODE_OPERATOR);
+
+        }
+
+        else if (current_token == LCURLY) {
+            josh_expression_block();
+        }
+
+
+        else { // FAILSAFE - consume anyway
+            consume();
+        }
+
+
+
+    }
+
+
+    endMode(MODE_EXPRESSION);
+
+
+}:;
+
+
+
+josh_argument_list[] { ENTRY_DEBUG
+
+    startNewMode(MODE_ARGUMENT_LIST);
+    startElement(SARGUMENT_LIST);
+
+
+    consume(); // consume "("
+
+
+    while (LA(1) != RPAREN && LA(1) != 1 /* EOF */) {
+        startNewMode(MODE_ARGUMENT);
+        startElement(SARGUMENT);
+
+        josh_expression({COMMA,RPAREN});
+
+        endMode(MODE_ARGUMENT);
+
+        if (LA(1) == COMMA) consume(); // consume ","
+    }
+
+
+    if (LA(1) == RPAREN) consume(); // consume ")"
+
+    endMode(MODE_ARGUMENT_LIST);
+
+}:;
+
+
+josh_generic_argument_list[] { ENTRY_DEBUG
+
+    startNewMode(MODE_ARGUMENT_LIST);
+    startElement(SGENERIC_ARGUMENT_LIST);
+
+
+    consume(); // consume "<"
+
+
+    while (LA(1) != TEMPOPE && LA(1) != 1 /* EOF */) {
+        startNewMode(MODE_ARGUMENT);
+        startElement(SGENERIC_ARGUMENT);
+
+        josh_expression({COMMA,TEMPOPE});
+
+        endMode(MODE_ARGUMENT);
+
+        if (LA(1) == COMMA) consume(); // consume ","
+    }
+
+
+    if (LA(1) == TEMPOPE) consume(); // consume ">"
+
+    endMode(MODE_ARGUMENT_LIST);
+
+}:;
+
+
+josh_name[] { ENTRY_DEBUG
+
+    int next = next_token();
+
+    // check if we are not in a complex name
+    if (!(next == PERIOD || next == DCOLON || next == TRETURN || next == MPDEREF || next == LBRACKET)) { // TODO - token set it
+        startNewMode(MODE_VARIABLE_NAME);
+        startElement(SNAME);
+
+        consume(); // consume NAME
+
+        endMode(MODE_VARIABLE_NAME);
+    }
+
+    // otherwise, we're complex, gotta loop and grab
+    else {
+        startNewMode(MODE_VARIABLE_NAME);
+        startElement(SNAME); // outer name
+
+        while (josh_name_tokens.member(LA(1)) || LA(1) == TEMPOPS || LA(1) == TEMPOPE || LA(1) == PERIOD || LA(1) == DCOLON || LA(1) == TRETURN || LA(1) == MPDEREF || LA(1) == LBRACKET) {
+
+            int current_token = LA(1);
+            if (josh_name_tokens.member(current_token)) {
+                startNewMode(MODE_VARIABLE_NAME);
+                startElement(SNAME); // inner name
+
+                consume(); // consume NAME
+
+                endMode(MODE_VARIABLE_NAME);
+            }
+            else if (current_token == TEMPOPS && josh_is_template_pair()) {
+                josh_generic_argument_list();
+            }
+            else if (current_token == TEMPOPS) {
+                break;
+            }
+            else if (current_token == LBRACKET) {
+                josh_index();
+            }
+            else {
+                startNewMode(MODE_OPERATOR);
+                startElement(SOPERATOR);
+
+                consume(); // consume OPERATORS
+
+                endMode(MODE_OPERATOR);
+            }
+
+        }
+        endMode(MODE_VARIABLE_NAME); // outer name
+    }
+
+}:;
+
+josh_index[] { ENTRY_DEBUG
+
+    startNewMode(MODE_INDEX_PY);
+    startElement(SINDEX);
+
+    consume(); // consume "["
+
+    if (LA(1) != RBRACKET) { josh_expression({RBRACKET}); }
+
+    if (LA(1) == RBRACKET) consume(); // consume "]"
+
+    endMode(MODE_INDEX_PY);
+
+}:;
+
+
+josh_is_function[] returns [bool is_function] { ENTRY_DEBUG
+
+    is_function = false;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+
+}:;
+
+josh_is_decl_stmt[] returns [bool is_decl_stmt] { ENTRY_DEBUG
+
+    is_decl_stmt = false;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+        int name_count = 0;
+
+        // Eat all names, modifiers, and specifiers at the start of line
+        while (josh_name_tokens.member(LA(1)) || josh_decl_specifiers.member(LA(1)) || LA(1) == DCOLON || josh_type_modifiers.member(LA(1))) {
+            if (josh_name_tokens.member(LA(1))) { ++name_count; }
+            consume();
+        }
+        // if one or less names, cannot be a decl_stmt
+        if (name_count <= 1) { is_decl_stmt = false; }
+        
+        // if a `;`, `=`, `[`, or `,` has to be a decl_stmt
+        else if (josh_decl_name_enders.member(LA(1))) { is_decl_stmt = true; }
+
+        // if a `(`, then this could be a function or a constructor init. Check the mode
+        // if in block content, decl_stmt. Else, need to do more checking
+        else if (LA(1) == LPAREN && inMode(MODE_BLOCK_CONTENT)) { is_decl_stmt = true; }
+        else if (LA(1) == LPAREN && !inMode(MODE_BLOCK_CONTENT)) { 
+            consume(); // consume the "("
+            bool is_argument = josh_is_argument();
+            if (is_argument) { is_decl_stmt = true; }
+            else { is_decl_stmt = false; }
+        }
+
+        // amything else, assume not a decl_stmt
+        else { is_decl_stmt = false; }
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+
+}:;
+
+josh_is_call[] returns [bool is_call] { ENTRY_DEBUG
+
+    is_call = false;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+        // collect all names and name ops
+
+        while(LA(1) == NAME || LA(1) == TEMPOPS || LA(1) == TEMPOPE || LA(1) == PERIOD || LA(1) == DCOLON || LA(1) == TRETURN || LA(1) == MPDEREF) {
+            if (LA(1) == TEMPOPS && !josh_is_template_pair()) {
+                break;
+            }
+            consume();
+        }
+
+        // Ok, that was epic, now we need to look at whatever we found
+        if (LA(1) != LPAREN) { is_call = false; }
+        else { is_call = true; }
+
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+}:;
+
+josh_is_argument[] returns [bool is_argument] { ENTRY_DEBUG
+
+    is_argument = false;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+        if (josh_is_call()) {
+            is_argument = true;
+        }
+        int paren_count = 0;
+        while(paren_count != -1) {
+            if (LA(1) == LPAREN) { 
+                ++paren_count;
+                consume();
+            }
+            else if (LA(1) == RPAREN) {
+                --paren_count;
+                consume();
+            }
+            else if (LA(1) == OPERATORS) {
+                is_argument = true; // TODO - make operator token set
+                break;
+            }
+            else { consume(); }
+        }
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+
+}:;
+
+
+josh_is_template_pair[] returns [bool is_pair] { ENTRY_DEBUG
+
+    is_pair = false;
+
+    int start = mark();
+    inputState->guessing++;
+
+    try {
+        int angle_count = 0;
+        while(true) {
+            if (LA(1) == 1 /* EOF */) break;
+
+            else if (LA(1) == TEMPOPS) ++angle_count;
+            else if (LA(1) == NAME) josh_name();
+
+            else if (LA(1) == TERMINATE || LA(1) == RPAREN || LA(1) == LCURLY || LA(1) == RCURLY) {
+                is_pair = false;
+                break;
+            }
+            else if (LA(1) == TEMPOPE) {
+                --angle_count;
+                if (angle_count == 0) {
+                    is_pair = true;
+                    break;
+                }
+            }
+
+            consume();
+        }
+    }
+    catch(...) {}
+
+    inputState->guessing--;
+    rewind(start);
+
+}:; 
+
 
 /*
   start

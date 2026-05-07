@@ -202,8 +202,14 @@ private:
                 srcMLParser::start_javascript();
                 break;
 
+            case LANGUAGE_C:
+            case LANGUAGE_CXX:
+                srcMLParser::josh_start();
+                break;
+
             default:
                 srcMLParser::start();
+                
             }
 
         } catch (const std::exception&) {
