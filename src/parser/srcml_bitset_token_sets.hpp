@@ -347,20 +347,34 @@ token_set(srcMLParser, function_declaration_specifiers_ts_token_set,
 token_set(srcMLParser, josh_name_tokens,
     srcMLParser::NAME, srcMLParser::VOID, srcMLParser::EMIT, srcMLParser::INCLUDE, srcMLParser::DEFINE, srcMLParser::ELIF,
     srcMLParser::ENDIF, srcMLParser::ERRORPREC, srcMLParser::IFDEF, srcMLParser::IFNDEF, srcMLParser::LINE,
-    srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING
+    srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING, srcMLParser::TYPENAME
+)
+
+token_set(srcMLParser, josh_name_operators,
+    srcMLParser::PERIOD, srcMLParser::DCOLON, srcMLParser::TRETURN, srcMLParser::MPDEREF
 )
 
 token_set(srcMLParser, josh_type_modifiers,
     srcMLParser::MULTOPS, srcMLParser::REFOPS
 )
 
+token_set(srcMLParser, josh_function_specifiers,
+    srcMLParser::CONST, srcMLParser::STATIC
+)
+
 token_set(srcMLParser, josh_decl_specifiers,
     srcMLParser::VIRTUAL, srcMLParser::CONST, srcMLParser::STATIC, srcMLParser::CONSTEXPR, srcMLParser::VOLATILE,
-    srcMLParser::EXTERN, srcMLParser::MUTABLE
+    srcMLParser::EXTERN, srcMLParser::MUTABLE, srcMLParser::OVERRIDE, srcMLParser::THREAD_LOCAL, srcMLParser::BLOCK,
+    srcMLParser::WEAK, srcMLParser::STRONG, srcMLParser::REGISTER
 )
 
 token_set(srcMLParser, josh_decl_name_enders,
-    srcMLParser::TERMINATE, srcMLParser::EQUAL, srcMLParser::LBRACKET, srcMLParser::COMMA, srcMLParser::LPAREN
+    srcMLParser::TERMINATE, srcMLParser::EQUAL, srcMLParser::LBRACKET, srcMLParser::COMMA, srcMLParser::LPAREN, srcMLParser::LCURLY,
+    srcMLParser::COLON
+)
+
+token_set(srcMLParser, josh_special_calls,
+    srcMLParser::ALIGNAS, srcMLParser::DECLTYPE
 )
 
 
