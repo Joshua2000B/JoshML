@@ -340,14 +340,12 @@ token_set(srcMLParser, function_declaration_specifiers_ts_token_set,
 )
 
 
-// static const std::unordered_set<int> JOSH_TYPE_MODIFIERS = { MULTOPS, REFOPS };
-//     static const std::unordered_set<int> JOSH_DECL_SPECIFIERS = {};
-//     static const std::unordered_set<int> JOSH_DECL_NAME_ENDERS = { TERMINATE, EQUAL, LBRACKET, COMMA };
 
 token_set(srcMLParser, josh_name_tokens,
     srcMLParser::NAME, srcMLParser::VOID, srcMLParser::EMIT, srcMLParser::INCLUDE, srcMLParser::DEFINE, srcMLParser::ELIF,
     srcMLParser::ENDIF, srcMLParser::ERRORPREC, srcMLParser::IFDEF, srcMLParser::IFNDEF, srcMLParser::LINE,
-    srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING, srcMLParser::TYPENAME
+    srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING, srcMLParser::TYPENAME, srcMLParser::MAIN,
+    srcMLParser::AUTO
 )
 
 token_set(srcMLParser, josh_name_operators,
@@ -359,7 +357,8 @@ token_set(srcMLParser, josh_type_modifiers,
 )
 
 token_set(srcMLParser, josh_function_specifiers,
-    srcMLParser::CONST, srcMLParser::STATIC
+    srcMLParser::CONST, srcMLParser::STATIC, srcMLParser::INLINE, srcMLParser::VIRTUAL,
+    srcMLParser::CONSTEXPR
 )
 
 token_set(srcMLParser, josh_decl_specifiers,
@@ -369,8 +368,8 @@ token_set(srcMLParser, josh_decl_specifiers,
 )
 
 token_set(srcMLParser, josh_decl_name_enders,
-    srcMLParser::TERMINATE, srcMLParser::EQUAL, srcMLParser::LBRACKET, srcMLParser::COMMA, srcMLParser::LPAREN, srcMLParser::LCURLY,
-    srcMLParser::COLON
+    srcMLParser::TERMINATE, srcMLParser::EQUAL, srcMLParser::COMMA, srcMLParser::LPAREN, srcMLParser::RPAREN,
+    srcMLParser::LCURLY, srcMLParser::COLON
 )
 
 token_set(srcMLParser, josh_special_calls,

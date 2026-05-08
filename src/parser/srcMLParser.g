@@ -1198,10 +1198,10 @@ josh_statement_level[] { ENTRY_DEBUG
 josh_statement[] { ENTRY_DEBUG
     int current_token = LA(1);
 
-    if (josh_name_tokens.member(current_token) || josh_decl_specifiers.member(current_token) || josh_special_calls.member(current_token)) {
+    if (josh_name_tokens.member(current_token) || josh_decl_specifiers.member(current_token) || josh_function_specifiers.member(current_token) || josh_special_calls.member(current_token)) {
         // if it matches a function, mark up function
         if (josh_is_function()) {
-            //josh_function();
+            josh_function();
         }
 
         // if it matches a decl, mark up decl_stmt
@@ -1434,6 +1434,63 @@ josh_function[] { ENTRY_DEBUG
     // now the parameter list
     josh_parameter_list();
 
+    // if "noexcept", add <noexcept>
+    if (LA(1) == NOEXCEPT) {
+        startNewMode(MODE_LOCAL);
+        startElement(SNOEXCEPT);
+
+        consume(); // consume "noexcept"
+
+        if (LA(1) == LPAREN) {
+            josh_argument_list();
+        }
+
+        endMode(MODE_LOCAL);
+    }
+
+    // if -> is there, need to add a new type
+    if (LA(1) == TRETURN) {
+        consume(); // consume "->"
+        // TODO - make counting type things a function at this point
+        int type_children_count = 0;
+
+        int start = mark();
+        inputState->guessing++;
+
+        try {
+            while(LA(1) != LCURLY && LA(1) != 1 /* EOF */) {
+                if (josh_name_tokens.member(LA(1))) {
+                    josh_name();
+                    ++type_children_count;
+                }
+                else if (josh_special_calls.member(LA(1))) {
+                    josh_special_call();
+                    ++type_children_count;
+                }
+                else {
+                    consume();
+                    ++type_children_count;
+                }
+            }
+        }
+        catch(...) {}
+
+        inputState->guessing--;
+        rewind(start);
+
+        josh_type(type_children_count);
+    }
+
+    // if there's any specifiers here, grab them
+    while (josh_function_specifiers.member(LA(1))) {
+        startNewMode(MODE_LOCAL);
+        startElement(SFUNCTION_SPECIFIER);
+
+        consume(); // consume the specifier
+
+        endMode(MODE_LOCAL);
+    }
+
     // lastly, the block
     josh_block();
 
@@ -1641,7 +1698,6 @@ josh_type[int count] { ENTRY_DEBUG
 
     startNewMode(MODE_EAT_TYPE);
     startElement(STYPE);
-
     for (int i = 0; i < count; ++i) {
         if (josh_name_tokens.member(LA(1))) {
             josh_name();
@@ -1654,7 +1710,7 @@ josh_type[int count] { ENTRY_DEBUG
 
             endMode(MODE_LOCAL);
         }
-        else if (josh_decl_specifiers.member(LA(1))) {
+        else if (josh_decl_specifiers.member(LA(1)) || josh_function_specifiers.member(LA(1))) {
             startNewMode(MODE_LOCAL);
             startElement(SFUNCTION_SPECIFIER);
 
@@ -1664,6 +1720,9 @@ josh_type[int count] { ENTRY_DEBUG
         }
         else if (josh_special_calls.member(LA(1))) {
             josh_special_call();
+        }
+        else { // Edge cases
+            consume();
         }
     }
 
@@ -1678,7 +1737,7 @@ josh_init[] { ENTRY_DEBUG
 
     consume(); // consume "="
 
-    josh_expression({TERMINATE,COMMA});
+    josh_expression({ TERMINATE, COMMA, (inTransparentMode(MODE_PARAMETER) ? RPAREN : 1 /* EOF */)});
 
 
     endMode(MODE_INIT);
@@ -1762,9 +1821,20 @@ josh_expression[std::unordered_set<int> EXPR_END_TOKENS] { ENTRY_DEBUG
 
         }
 
+        else if (current_token == LITERAL_TRUE || current_token == LITERAL_FALSE) {
+            startNewMode(MODE_LOCAL);
+            startElement(SBOOLEAN);
+
+            consume(); // consume "true" or "false"
+
+            endMode(MODE_LOCAL);
+        }
+
         else if (current_token == LCURLY) {
             josh_expression_block();
         }
+
+
 
 
         else { // FAILSAFE - consume anyway
@@ -1864,8 +1934,39 @@ josh_name[] { ENTRY_DEBUG
 
     int next = next_token();
 
+    bool complex_name = false;
+    bool complex_indexed_name = false;
+
+    // check if the next token indicates a complex name
+    if (next == PERIOD || next == DCOLON || next == TRETURN || next == MPDEREF || next == LBRACKET || LA(1) == TYPENAME) {
+        complex_name = true;
+    }
+
+    // if the next token is a modifier, check if after any modifiers there is an index
+    if (josh_type_modifiers.member(next)) {
+        int start = mark();
+        inputState->guessing++;
+
+        try {
+            consume(); // grab the current to move onto the modifier(s)
+            while (josh_type_modifiers.member(LA(1))) {
+                consume();
+            }
+            if (LA(1) == LBRACKET) {
+                complex_name = true;
+                complex_indexed_name = true;
+            }
+        }
+        catch(...) {}
+
+        inputState->guessing--;
+        rewind(start);
+
+    }
+
+
     // check if we are not in a complex name
-    if (!(next == PERIOD || next == DCOLON || next == TRETURN || next == MPDEREF || next == LBRACKET) && LA(1) != TYPENAME) { // TODO - token set it
+    if (!complex_name) { // TODO - token set it
         startNewMode(MODE_VARIABLE_NAME);
         startElement(SNAME);
 
@@ -1879,7 +1980,7 @@ josh_name[] { ENTRY_DEBUG
         startNewMode(MODE_VARIABLE_NAME);
         startElement(SNAME); // outer name
 
-        while (josh_name_tokens.member(LA(1)) || LA(1) == TEMPOPS || LA(1) == TEMPOPE || josh_name_operators.member(LA(1)) || LA(1) == LBRACKET) {
+        while (josh_name_tokens.member(LA(1)) || LA(1) == TEMPOPS || LA(1) == TEMPOPE || josh_name_operators.member(LA(1)) || LA(1) == LBRACKET || (josh_type_modifiers.member(LA(1)) && complex_indexed_name)) {
 
             int current_token = LA(1);
             if (josh_name_tokens.member(current_token) && current_token != TYPENAME) {
@@ -1909,6 +2010,7 @@ josh_name[] { ENTRY_DEBUG
             }
             else if (current_token == LBRACKET) {
                 josh_index();
+                break;
             }
             else if (josh_name_operators.member(LA(1))) {
                 startNewMode(MODE_OPERATOR);
@@ -1927,6 +2029,15 @@ josh_name[] { ENTRY_DEBUG
 
                     endMode(MODE_LOCAL);
                 }
+            }
+            // if we look something like int*[], the modifiers are in this complex name
+            else if (josh_type_modifiers.member(LA(1)) && complex_indexed_name) {
+                startNewMode(MODE_LOCAL);
+                startElement(SMODIFIER);
+
+                consume();
+
+                endMode(MODE_LOCAL);
             }
             else { // mark anything else up as an operator
                 startNewMode(MODE_OPERATOR);
