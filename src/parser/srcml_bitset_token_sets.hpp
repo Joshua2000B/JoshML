@@ -345,20 +345,20 @@ token_set(srcMLParser, josh_name_tokens,
     srcMLParser::NAME, srcMLParser::VOID, srcMLParser::EMIT, srcMLParser::INCLUDE, srcMLParser::DEFINE, srcMLParser::ELIF,
     srcMLParser::ENDIF, srcMLParser::ERRORPREC, srcMLParser::IFDEF, srcMLParser::IFNDEF, srcMLParser::LINE,
     srcMLParser::PRAGMA, srcMLParser::UNDEF, srcMLParser::WARNING, srcMLParser::TYPENAME, srcMLParser::MAIN,
-    srcMLParser::AUTO
+    srcMLParser::AUTO, srcMLParser::MUTABLE, srcMLParser::OPERATOR
 )
 
 token_set(srcMLParser, josh_name_operators,
-    srcMLParser::PERIOD, srcMLParser::DCOLON, srcMLParser::TRETURN, srcMLParser::MPDEREF
+    srcMLParser::PERIOD, srcMLParser::DCOLON, srcMLParser::TRETURN, srcMLParser::MPDEREF, srcMLParser::DOTDEREF
 )
 
 token_set(srcMLParser, josh_type_modifiers,
-    srcMLParser::MULTOPS, srcMLParser::REFOPS
+    srcMLParser::MULTOPS, srcMLParser::REFOPS, srcMLParser::DOTDOTDOT
 )
 
 token_set(srcMLParser, josh_function_specifiers,
     srcMLParser::CONST, srcMLParser::STATIC, srcMLParser::INLINE, srcMLParser::VIRTUAL,
-    srcMLParser::CONSTEXPR
+    srcMLParser::CONSTEXPR, srcMLParser::FINAL, srcMLParser::OVERRIDE
 )
 
 token_set(srcMLParser, josh_decl_specifiers,
@@ -373,7 +373,18 @@ token_set(srcMLParser, josh_decl_name_enders,
 )
 
 token_set(srcMLParser, josh_special_calls,
-    srcMLParser::ALIGNAS, srcMLParser::DECLTYPE
+    srcMLParser::ALIGNAS, srcMLParser::DECLTYPE, srcMLParser::ALIGNOF
+)
+
+token_set(srcMLParser, josh_expr_operators,
+    srcMLParser::OPERATORS, srcMLParser::MULTOPS, srcMLParser::ASSIGNMENT, srcMLParser::EQUAL, 
+    srcMLParser::TEMPOPS, srcMLParser::TEMPOPE, srcMLParser::LPAREN, srcMLParser::RPAREN,
+    srcMLParser::REFOPS, srcMLParser::RVALUEREF
+)
+
+token_set(srcMLParser, josh_literals,
+    srcMLParser::CONSTANTS, srcMLParser::LITERAL_FALSE, srcMLParser::LITERAL_TRUE, srcMLParser::NULLPTR,
+    srcMLParser::COMPLEX_NUMBER, srcMLParser::STRING_START
 )
 
 

@@ -835,6 +835,8 @@ public:
     static const antlr::BitSet josh_name_tokens;
     static const antlr::BitSet josh_name_operators;
     static const antlr::BitSet josh_special_calls;
+    static const antlr::BitSet josh_expr_operators;
+    static const antlr::BitSet josh_literals;
 
     // constructor
     srcMLParser(antlr::TokenStream& lexer, int lang, const OPTION_TYPE& options);
@@ -1198,7 +1200,7 @@ josh_statement_level[] { ENTRY_DEBUG
 josh_statement[] { ENTRY_DEBUG
     int current_token = LA(1);
 
-    if (josh_name_tokens.member(current_token) || josh_decl_specifiers.member(current_token) || josh_function_specifiers.member(current_token) || josh_special_calls.member(current_token)) {
+    if (josh_name_tokens.member(current_token) || josh_decl_specifiers.member(current_token) || josh_function_specifiers.member(current_token) || josh_special_calls.member(current_token) || josh_expr_operators.member(current_token)) {
         // if it matches a function, mark up function
         if (josh_is_function()) {
             josh_function();
@@ -1215,7 +1217,7 @@ josh_statement[] { ENTRY_DEBUG
         }
     }
 
-    else if (current_token == CONSTANTS) {
+    else if (josh_literals.member(current_token)) {
         josh_expression_statement();
     }
 
@@ -1241,6 +1243,18 @@ josh_statement[] { ENTRY_DEBUG
 
     else if (current_token == IF) {
         josh_if_stmt();
+    }
+
+    else if (current_token == SWITCH) {
+        josh_switch_statement();
+    }
+
+    else if (current_token == CASE) {
+        josh_case();
+    }
+
+    else if (current_token == DEFAULT) {
+        josh_default();
     }
 
     else { // FAILSAFE - consume anyway
@@ -1285,6 +1299,11 @@ josh_break_statement[] { ENTRY_DEBUG
     startElement(SBREAK_STATEMENT);
 
     consume(); // consume "break"
+
+    if (josh_name_tokens.member(LA(1))) {
+        josh_name();
+    }
+
     if (LA(1) == TERMINATE) consume(); // consume ";"
 
     endMode(MODE_STATEMENT);
@@ -1393,11 +1412,60 @@ josh_if_stmt[] { ENTRY_DEBUG
     endMode(MODE_IF_STATEMENT);
 }:;
 
+josh_switch_statement[] { ENTRY_DEBUG
+
+    startNewMode(MODE_SWITCH);
+    startElement(SSWITCH);
+
+    consume(); // consume "switch"
+
+    if (LA(1) == LPAREN) { josh_condition(); }
+
+    if (LA(1) == LCURLY) josh_block();
+    else josh_pseudo_block();
+
+    endMode(MODE_SWITCH);
+
+}:;
+
+josh_case[] { ENTRY_DEBUG
+
+    startNewMode(MODE_CASE_PY);
+    startElement(SCASE);
+
+    consume(); // consume "case"
+
+    josh_expression({ COLON });
+
+    if (LA(1) == COLON) consume(); // consume ":"
+
+    endMode(MODE_CASE_PY);
+
+}:;
+
+josh_default[] { ENTRY_DEBUG
+
+    startNewMode(MODE_CASE_PY);
+    startElement(SDEFAULT);
+
+    consume(); // consume "default"
+
+    if (LA(1) == COLON) consume(); // consume ":"
+
+    endMode(MODE_CASE_PY);
+
+}:;
+
 
 josh_function[] { ENTRY_DEBUG
 
+    TokenPosition tp;
+
+    bool is_operator_function = false;
+
     startNewMode(MODE_FUNCTION);
     startElement(SFUNCTION_DEFINITION);
+    setTokenPosition(tp);
 
     int type_children_count = 0;
 
@@ -1429,6 +1497,10 @@ josh_function[] { ENTRY_DEBUG
     josh_type(type_children_count-1);
 
     // now the name
+    if (LA(1) == OPERATOR) {
+        tp.setType(SOPERATOR_FUNCTION);
+        is_operator_function = true;
+    }
     josh_name();
 
     // now the parameter list
@@ -1448,6 +1520,16 @@ josh_function[] { ENTRY_DEBUG
         endMode(MODE_LOCAL);
     }
 
+    // if & or && is there, add ref_qualifier
+    if (LA(1) == REFOPS || LA(1) == RVALUEREF) {
+        startNewMode(MODE_LOCAL);
+        startElement(SREF_QUALIFIER);
+
+        consume(); // consume "&" or "&&"
+
+        endMode(MODE_LOCAL);
+    }
+
     // if -> is there, need to add a new type
     if (LA(1) == TRETURN) {
         consume(); // consume "->"
@@ -1458,7 +1540,7 @@ josh_function[] { ENTRY_DEBUG
         inputState->guessing++;
 
         try {
-            while(LA(1) != LCURLY && LA(1) != 1 /* EOF */) {
+            while(LA(1) != LCURLY && LA(1) != TERMINATE && LA(1) != 1 /* EOF */) {
                 if (josh_name_tokens.member(LA(1))) {
                     josh_name();
                     ++type_children_count;
@@ -1491,8 +1573,48 @@ josh_function[] { ENTRY_DEBUG
         endMode(MODE_LOCAL);
     }
 
-    // lastly, the block
-    josh_block();
+    // if you see throw, catch
+    if (LA(1) == THROW) {
+        startNewMode(MODE_THROW);
+        startElement(STHROW_STATEMENT);
+
+        consume(); // consume "throw"
+
+        josh_argument_list();
+
+        endMode(MODE_THROW);
+    }
+
+    // if there is an equal, handle the various markups
+    if (LA(1) == EQUAL) {
+        consume(); // consume "="
+        if (LA(1) == CONSTANTS) {
+            startNewMode(MODE_NUMBER_LITERAL);
+            startElement(SLITERAL);
+            consume(); // consume the number
+            endMode(MODE_NUMBER_LITERAL);
+        }
+        else if (LA(1) == DELETE) {
+            startNewMode(MODE_LOCAL);
+            startElement(SFUNCTION_SPECIFIER);
+            consume(); // consume "delete"
+            endMode(MODE_LOCAL);
+        }
+    }
+
+    // lastly, determine if it is a function or function_decl
+    if (LA(1) == LCURLY) {
+        josh_block();
+    }
+    else if (LA(1) == TERMINATE) {
+        if (!is_operator_function) {
+            tp.setType(SFUNCTION_DECLARATION);
+        }
+        else {
+            tp.setType(SOPERATOR_FUNCTION_DECL);
+        }
+        consume(); // consume ";"
+    }
 
 
     endMode(MODE_FUNCTION);
@@ -1573,6 +1695,15 @@ josh_pseudo_block[] { ENTRY_DEBUG
     startNewMode(MODE_BLOCK_CONTENT);
     startNoSkipElement(SCONTENT);
 
+    while(LA(1) == CASE || LA(1) == DEFAULT) {
+        if (LA(1) == CASE) {
+            josh_case();
+        }
+        else {
+            josh_default();
+        }
+    }
+
     josh_statement();
 
     endMode(MODE_BLOCK_CONTENT);
@@ -1630,6 +1761,7 @@ josh_decl[bool prev_type = false] { ENTRY_DEBUG
     if (!prev_type) {
 
         int type_children_count = 0;
+        int type_names = 0;
 
         int start = mark();
         inputState->guessing++;
@@ -1639,6 +1771,7 @@ josh_decl[bool prev_type = false] { ENTRY_DEBUG
                 if (josh_name_tokens.member(LA(1))) {
                     josh_name();
                     ++type_children_count;
+                    ++type_names;
                 }
                 else if (josh_special_calls.member(LA(1))) {
                     josh_special_call();
@@ -1655,7 +1788,10 @@ josh_decl[bool prev_type = false] { ENTRY_DEBUG
         inputState->guessing--;
         rewind(start);
 
-        josh_type(type_children_count-1);
+        josh_type(type_children_count-1, type_names);
+
+
+        
     }
     else { // do <type ref="pref"/>
         startNewMode(MODE_LOCAL);
@@ -1664,7 +1800,9 @@ josh_decl[bool prev_type = false] { ENTRY_DEBUG
     }
 
     // now the name
-    josh_name();
+    if (josh_name_tokens.member(LA(1))) {
+        josh_name();
+    }
 
 
     if (LA(1) == LPAREN || LA(1) == LCURLY) {
@@ -1694,11 +1832,16 @@ josh_decl[bool prev_type = false] { ENTRY_DEBUG
 
 }:;
 
-josh_type[int count] { ENTRY_DEBUG
+josh_type[int child_count, int name_count=-1] { ENTRY_DEBUG
+
+    if (name_count == 1 && inTransparentMode(MODE_PARAMETER)) {
+        ++child_count;
+    }
 
     startNewMode(MODE_EAT_TYPE);
     startElement(STYPE);
-    for (int i = 0; i < count; ++i) {
+
+    for (int i = 0; i < child_count; ++i) {
         if (josh_name_tokens.member(LA(1))) {
             josh_name();
         }
@@ -1788,26 +1931,68 @@ josh_expression[std::unordered_set<int> EXPR_END_TOKENS] { ENTRY_DEBUG
 
         }
 
+        else if (josh_special_calls.member(current_token)) {
+            josh_special_call();
+        }
+
         else if (josh_name_tokens.member(current_token)) { 
 
             josh_name();
 
         }
 
-        else if (current_token == CONSTANTS) { 
+        else if (current_token == CONSTANTS) {
 
-            startNewMode(MODE_NUMBER_LITERAL);
-            startElement(SLITERAL);
+            // Need to check if the number is just a number or part of a complex
+            bool is_complex = false;
 
-            consume(); // consume CONSTANTS
+            int start = mark();
+            inputState->guessing++;
 
-            endMode(MODE_NUMBER_LITERAL);
+            try {
+                consume(); // consume the current number
+                is_complex = LA(1) == OPERATORS && (LT(1)->getText() == "+"sv || LT(1)->getText() == "-"sv) && next_token() == COMPLEX_NUMBER;
+            }
+            catch(...) {}
 
+            inputState->guessing--;
+            rewind(start);
+
+            if (!is_complex) {
+                startNewMode(MODE_NUMBER_LITERAL);
+                startElement(SLITERAL);
+
+                consume(); // consume CONSTANTS
+
+                endMode(MODE_NUMBER_LITERAL);
+            }
+            else {
+                startNewMode(MODE_NUMBER_LITERAL);
+                startElement(SCOMPLEX);
+
+                consume(); // consume CONSTANTS
+                consume(); // consume "+" or "-"
+                consume(); // consume COMPLEX_NUMBER
+
+                endMode(MODE_NUMBER_LITERAL);
+            }
         }
 
-        else if (current_token == OPERATORS || current_token == MULTOPS || current_token == ASSIGNMENT || current_token == EQUAL || 
-                 current_token == TEMPOPS || current_token == TEMPOPE || current_token == LPAREN || current_token == RPAREN ||
-                 current_token == REFOPS) {
+        else if (current_token == COMPLEX_NUMBER) {
+            startNewMode(MODE_NUMBER_LITERAL);
+            startElement(SCOMPLEX);
+
+            consume(); // consume COMPLEX_NUMBER
+
+            if (LA(1) == OPERATORS && (LT(1)->getText() == "+"sv || LT(1)->getText() == "-"sv) && next_token() == CONSTANTS) {
+                consume(); // consume "+" or "-"
+                consume(); // consume CONSTANTS
+            }
+
+            endMode(MODE_NUMBER_LITERAL);
+        }
+
+        else if (josh_expr_operators.member(current_token)) {
 
             if (current_token == LPAREN) ++paren_count;
             else if (current_token == RPAREN) --paren_count;
@@ -1826,6 +2011,32 @@ josh_expression[std::unordered_set<int> EXPR_END_TOKENS] { ENTRY_DEBUG
             startElement(SBOOLEAN);
 
             consume(); // consume "true" or "false"
+
+            endMode(MODE_LOCAL);
+        }
+
+        else if (current_token == STRING_START) {
+
+            startNewMode(MODE_LOCAL);
+            startElement(SSTRING);
+
+            consume(); // consume STRING_START
+
+            while (LA(1) != STRING_END && LA(1) != RAW_STRING_END) {
+                consume(); // consume the string
+            }
+
+            consume(); // consume STRING_END or RAW_STRING_END
+
+            endMode(MODE_LOCAL);
+
+        }
+
+        else if (current_token == NULLPTR) {
+            startNewMode(MODE_LOCAL);
+            startElement(SNULL);
+
+            consume(); // consume "nullptr"
 
             endMode(MODE_LOCAL);
         }
@@ -1859,6 +2070,9 @@ josh_special_call[] { ENTRY_DEBUG
     else if (LA(1) == DECLTYPE) {
         startElement(SDECLTYPE);
     }
+    else if (LA(1) == ALIGNOF) {
+        startElement(SALIGNOF);
+    }
     else {
         startElement(SFUNCTION_CALL);
     }
@@ -1884,12 +2098,28 @@ josh_argument_list[] { ENTRY_DEBUG
 
 
     while (LA(1) != (is_curly_arg_list ? RCURLY : RPAREN) && LA(1) != 1 /* EOF */) {
-        startNewMode(MODE_ARGUMENT);
-        startElement(SARGUMENT);
 
-        josh_expression({ COMMA, (is_curly_arg_list ? RCURLY : RPAREN) });
+        if (LA(1) == NOEXCEPT) {
+            startNewMode(MODE_LOCAL);
+            startElement(SNOEXCEPT);
 
-        endMode(MODE_ARGUMENT);
+            consume(); // consume "noexcept"
+
+            if (LA(1) == LPAREN) {
+                josh_argument_list();
+            }
+
+            endMode(MODE_LOCAL);
+        }
+
+        else {
+            startNewMode(MODE_ARGUMENT);
+            startElement(SARGUMENT);
+
+            josh_expression({ COMMA, (is_curly_arg_list ? RCURLY : RPAREN) });
+
+            endMode(MODE_ARGUMENT);
+        }
 
         if (LA(1) == COMMA) consume(); // consume ","
     }
@@ -1938,7 +2168,7 @@ josh_name[] { ENTRY_DEBUG
     bool complex_indexed_name = false;
 
     // check if the next token indicates a complex name
-    if (next == PERIOD || next == DCOLON || next == TRETURN || next == MPDEREF || next == LBRACKET || LA(1) == TYPENAME) {
+    if (josh_name_operators.member(next) || next == LBRACKET || LA(1) == TYPENAME || LA(1) == OPERATOR) {
         complex_name = true;
     }
 
@@ -1983,7 +2213,7 @@ josh_name[] { ENTRY_DEBUG
         while (josh_name_tokens.member(LA(1)) || LA(1) == TEMPOPS || LA(1) == TEMPOPE || josh_name_operators.member(LA(1)) || LA(1) == LBRACKET || (josh_type_modifiers.member(LA(1)) && complex_indexed_name)) {
 
             int current_token = LA(1);
-            if (josh_name_tokens.member(current_token) && current_token != TYPENAME) {
+            if (josh_name_tokens.member(current_token) && current_token != TYPENAME && current_token != OPERATOR) {
                 startNewMode(MODE_VARIABLE_NAME);
                 startElement(SNAME); // inner name
 
@@ -1999,6 +2229,20 @@ josh_name[] { ENTRY_DEBUG
                 startElement(STYPENAME);
 
                 consume(); // consume "typename"
+
+                endMode(MODE_VARIABLE_NAME);
+            }
+            else if (current_token == OPERATOR) {
+                consume(); // consume "operator"
+
+                startNewMode(MODE_VARIABLE_NAME);
+                startElement(SNAME);
+
+                consume(); // consume the operator
+
+                if (LA(1) == TEMPOPE || LA(1) == RBRACKET) {
+                    consume(); // consume ">" or "]"
+                }
 
                 endMode(MODE_VARIABLE_NAME);
             }
@@ -2084,6 +2328,14 @@ josh_is_function[] returns [bool is_function] { ENTRY_DEBUG
         while (josh_name_tokens.member(LA(1)) || josh_function_specifiers.member(LA(1)) || LA(1) == DCOLON || 
                josh_type_modifiers.member(LA(1)) /*|| josh_special_calls.member(LA(1))*/) {
             if (josh_name_tokens.member(LA(1)) || josh_function_specifiers.member(LA(1))) { ++name_count; }
+            if (LA(1) == OPERATOR) { 
+                is_function = true; 
+                consume(); // consume extra token so the operator gets consumed
+                if ((LA(1) == TEMPOPE && next_token() == TEMPOPE) ||
+                    (LA(1) == LBRACKET && next_token() == RBRACKET)) {
+                    consume(); // consume extra extra token
+                }
+            }
             // else if (josh_special_calls.member(LA(1))) {
             //     josh_special_call();
             //     ++name_count;
@@ -2095,14 +2347,15 @@ josh_is_function[] returns [bool is_function] { ENTRY_DEBUG
         
 
         // if one or less names, cannot be a function
-       if (name_count <= 1) { is_function = false; }
+        if (name_count <= 1) { is_function = false; }
 
         // if no (, cannot be a function
-        if (LA(1) != LPAREN) { is_function = false; }
+        else if (LA(1) != LPAREN) { is_function = false; }
 
         // if a `(`, then this could be a function or a decl constructor init. Check the mode
         // if in block content, decl_stmt. Else, need to do more checking
         else if (LA(1) == LPAREN && inMode(MODE_BLOCK_CONTENT)) { is_function = false; }
+        else if (josh_name_tokens.member(next_token())) { is_function = true; }
         else if (LA(1) == LPAREN && !inMode(MODE_BLOCK_CONTENT)) {
             int inner_start = mark();
             inputState->guessing++;
@@ -2242,6 +2495,10 @@ josh_is_argument[] returns [bool is_argument] { ENTRY_DEBUG
             }
             else if (LA(1) == CONSTANTS) {
                 is_argument = true;
+                break;
+            }
+            else if (josh_decl_specifiers.member(LA(1))) {
+                is_argument = false;
                 break;
             }
             else { consume(); }

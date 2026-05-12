@@ -264,6 +264,7 @@ const static srcMLState::MODE_TYPE MODE_NUMBER_LITERAL;
 
 const static srcMLState::MODE_TYPE MODE_OPERATOR;
 const static srcMLState::MODE_TYPE MODE_FUNCTION;
+const static srcMLState::MODE_TYPE MODE_THROW;
 
 // Python modes
 const static srcMLState::MODE_TYPE MODE_EXCLUDE_NO_PAREN_TUPLES_PY;
